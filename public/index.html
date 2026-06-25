@@ -1,0 +1,601 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Family Calendar</title>
+  <style>
+    :root {
+      --white: #ffffff;
+      --bg: #f5f7fb;
+      --text: #1c1c2e;
+      --muted: #8e92a8;
+      --border: #e8eaf0;
+      --today-ring: #3b82f6;
+      --today-col: #eff6ff;
+      --radius: 10px;
+      --header-h: 76px;
+      --legend-h: 48px;
+    }
+
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    html, body {
+      height: 100%;
+      overflow: hidden;
+      background: var(--bg);
+      color: var(--text);
+      font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Display',
+                   'Segoe UI', system-ui, sans-serif;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    /* ── Layout shell ──────────────────────────────── */
+    #shell {
+      height: 100vh;
+      display: flex;
+      flex-direction: column;
+    }
+
+    /* ── Header ────────────────────────────────────── */
+    #header {
+      flex-shrink: 0;
+      height: var(--header-h);
+      background: var(--white);
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      padding: 0 28px;
+      gap: 16px;
+    }
+
+    #date-label {
+      flex: 1;
+      font-size: 1.25rem;
+      font-weight: 600;
+      color: var(--text);
+      white-space: nowrap;
+    }
+
+    /* Week navigation */
+    #nav {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .nav-btn {
+      background: none;
+      border: 1.5px solid var(--border);
+      border-radius: 8px;
+      width: 34px;
+      height: 34px;
+      cursor: pointer;
+      font-size: 1.2rem;
+      color: var(--muted);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: border-color 0.15s, color 0.15s;
+    }
+    .nav-btn:hover { border-color: var(--today-ring); color: var(--today-ring); }
+
+    #week-range {
+      font-size: 0.85rem;
+      font-weight: 500;
+      color: var(--muted);
+      min-width: 130px;
+      text-align: center;
+    }
+
+    #time-label {
+      font-size: 1.9rem;
+      font-weight: 700;
+      font-variant-numeric: tabular-nums;
+      letter-spacing: -0.5px;
+      color: var(--text);
+      white-space: nowrap;
+    }
+
+    /* ── Legend ────────────────────────────────────── */
+    #legend {
+      flex-shrink: 0;
+      height: var(--legend-h);
+      background: var(--white);
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      padding: 0 28px;
+      gap: 22px;
+      overflow-x: auto;
+    }
+
+    #legend::-webkit-scrollbar { display: none; }
+
+    .member-chip {
+      display: flex;
+      align-items: center;
+      gap: 7px;
+      white-space: nowrap;
+    }
+
+    .member-dot {
+      width: 11px;
+      height: 11px;
+      border-radius: 50%;
+      flex-shrink: 0;
+    }
+
+    .member-name {
+      font-size: 0.82rem;
+      font-weight: 600;
+      color: var(--muted);
+      letter-spacing: 0.02em;
+    }
+
+    /* ── Week grid ─────────────────────────────────── */
+    #week-grid {
+      flex: 1;
+      display: grid;
+      grid-template-columns: repeat(7, 1fr);
+      overflow: hidden;
+      min-height: 0;
+      gap: 0;
+    }
+
+    /* ── Day column ────────────────────────────────── */
+    .day-col {
+      display: flex;
+      flex-direction: column;
+      background: var(--white);
+      border-right: 1px solid var(--border);
+      min-height: 0;
+      transition: background 0.15s;
+    }
+
+    .day-col:last-child { border-right: none; }
+    .day-col.is-today { background: var(--today-col); }
+
+    /* Day header (DOW + date number) */
+    .day-head {
+      flex-shrink: 0;
+      padding: 14px 10px 10px;
+      text-align: center;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .day-dow {
+      font-size: 0.65rem;
+      font-weight: 700;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      color: var(--muted);
+    }
+
+    .day-col.is-today .day-dow { color: var(--today-ring); }
+
+    .day-num {
+      margin-top: 5px;
+      font-size: 1.65rem;
+      font-weight: 700;
+      line-height: 1;
+      color: var(--text);
+    }
+
+    /* Today: circle behind the number */
+    .day-col.is-today .day-num {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 42px;
+      height: 42px;
+      border-radius: 50%;
+      background: var(--today-ring);
+      color: #fff;
+      font-size: 1.35rem;
+    }
+
+    /* Events list */
+    .events-wrap {
+      flex: 1;
+      overflow-y: auto;
+      padding: 8px 7px;
+      display: flex;
+      flex-direction: column;
+      gap: 5px;
+      min-height: 0;
+    }
+
+    .events-wrap::-webkit-scrollbar { width: 3px; }
+    .events-wrap::-webkit-scrollbar-thumb { background: #dde1ec; border-radius: 4px; }
+
+    /* Event pill */
+    .ev {
+      border-radius: 7px;
+      padding: 6px 9px;
+      color: #fff;
+      line-height: 1.3;
+      word-break: break-word;
+    }
+
+    .ev-time {
+      font-size: 0.65rem;
+      opacity: 0.88;
+      font-weight: 400;
+      margin-bottom: 1px;
+    }
+
+    .ev-title {
+      font-size: 0.78rem;
+      font-weight: 600;
+    }
+
+    /* All-day pills get lighter text on lighter bg */
+    .ev.all-day { opacity: 0.95; }
+
+    /* Empty day placeholder */
+    .empty-day {
+      flex: 1;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .empty-dot {
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      background: #dde1ec;
+    }
+
+    /* ── Error banner ───────────────────────────────── */
+    #error-banner {
+      position: fixed;
+      top: 12px;
+      left: 50%;
+      transform: translateX(-50%);
+      background: #fef2f2;
+      color: #991b1b;
+      border: 1px solid #fca5a5;
+      border-radius: 9px;
+      padding: 10px 20px;
+      font-size: 0.82rem;
+      font-weight: 500;
+      display: none;
+      z-index: 1000;
+      max-width: 90vw;
+      text-align: center;
+    }
+
+    /* ── Loading state ──────────────────────────────── */
+    .loading-col .events-wrap {
+      align-items: center;
+      justify-content: center;
+    }
+
+    @keyframes pulse {
+      0%, 100% { opacity: 0.4; }
+      50% { opacity: 1; }
+    }
+    .skeleton {
+      background: #e5e7eb;
+      border-radius: 6px;
+      height: 46px;
+      width: 90%;
+      animation: pulse 1.4s ease-in-out infinite;
+    }
+  </style>
+</head>
+<body>
+
+<div id="error-banner"></div>
+
+<div id="shell">
+
+  <header id="header">
+    <div id="date-label">Loading…</div>
+
+    <div id="nav">
+      <button class="nav-btn" onclick="shiftWeek(-1)" title="Previous week">‹</button>
+      <span id="week-range"></span>
+      <button class="nav-btn" onclick="shiftWeek(1)" title="Next week">›</button>
+      <button class="nav-btn" onclick="goToday()" title="Back to today" style="width:auto;padding:0 10px;font-size:0.75rem;font-weight:600;letter-spacing:0.04em;">TODAY</button>
+    </div>
+
+    <div id="time-label">--:--</div>
+  </header>
+
+  <div id="legend"></div>
+
+  <div id="week-grid"></div>
+
+</div>
+
+<script>
+'use strict';
+
+// ── State ─────────────────────────────────────────────────────
+const state = {
+  weekOffset: 0,   // 0 = current week
+  members: {},     // id → { label, color }
+  refreshTimer: null,
+};
+
+const DAYS = ['SUN', 'MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT'];
+
+// Skylight uses color names or hex values. Map common names → hex.
+const COLOR_MAP = {
+  red:     '#EF4444', coral:   '#F87171', pink:    '#EC4899',
+  orange:  '#F97316', amber:   '#F59E0B', yellow:  '#EAB308',
+  lime:    '#84CC16', green:   '#22C55E', teal:    '#14B8A6',
+  cyan:    '#06B6D4', blue:    '#3B82F6', indigo:  '#6366F1',
+  violet:  '#8B5CF6', purple:  '#A855F7', fuchsia: '#D946EF',
+  gray:    '#6B7280', slate:   '#64748B',
+};
+
+function resolveColor(raw) {
+  if (!raw) return '#9CA3AF';
+  if (raw.startsWith('#')) return raw;
+  return COLOR_MAP[raw.toLowerCase()] ?? '#9CA3AF';
+}
+
+// ── Clock ─────────────────────────────────────────────────────
+function tickClock() {
+  const now = new Date();
+  document.getElementById('time-label').textContent =
+    now.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
+  document.getElementById('date-label').textContent =
+    now.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' });
+}
+setInterval(tickClock, 1000);
+tickClock();
+
+// ── Week math ─────────────────────────────────────────────────
+function getWeekDates(offset) {
+  const now = new Date();
+  const dow = now.getDay(); // 0 = Sun
+  const sun = new Date(now);
+  sun.setDate(now.getDate() - dow + offset * 7);
+  sun.setHours(0, 0, 0, 0);
+
+  return Array.from({ length: 7 }, (_, i) => {
+    const d = new Date(sun);
+    d.setDate(sun.getDate() + i);
+    return d;
+  });
+}
+
+function isoDate(d) {
+  // Local ISO date (YYYY-MM-DD) without timezone shift
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
+}
+
+function isToday(d) {
+  const n = new Date();
+  return d.getDate() === n.getDate() &&
+         d.getMonth() === n.getMonth() &&
+         d.getFullYear() === n.getFullYear();
+}
+
+// ── Navigation ────────────────────────────────────────────────
+function shiftWeek(delta) { state.weekOffset += delta; load(); }
+function goToday() { state.weekOffset = 0; load(); }
+
+// ── Error banner ──────────────────────────────────────────────
+function showError(msg) {
+  const el = document.getElementById('error-banner');
+  el.textContent = `⚠ ${msg}`;
+  el.style.display = 'block';
+  setTimeout(() => el.style.display = 'none', 8000);
+}
+
+// ── Members ───────────────────────────────────────────────────
+async function loadMembers() {
+  try {
+    const r = await fetch('/api/members');
+    const body = await r.json();
+    if (body.error) { showError(body.error); return; }
+
+    const items = Array.isArray(body) ? body : (body.data ?? []);
+    items.forEach(m => {
+      const attr = m.attributes ?? m;
+      const color = resolveColor(attr.color);
+      state.members[m.id] = { label: attr.label ?? attr.name ?? 'Family', color };
+    });
+    renderLegend();
+  } catch (e) {
+    showError('Could not load family members: ' + e.message);
+  }
+}
+
+function renderLegend() {
+  const legend = document.getElementById('legend');
+  const chips = Object.values(state.members)
+    .filter(m => m.label && m.label.trim())
+    .map(m => `
+      <div class="member-chip">
+        <div class="member-dot" style="background:${m.color}"></div>
+        <span class="member-name">${m.label}</span>
+      </div>
+    `).join('');
+
+  legend.innerHTML = chips || '<span style="font-size:0.8rem;color:#9CA3AF">No family members found</span>';
+}
+
+// ── Calendar ──────────────────────────────────────────────────
+async function loadCalendar(dates) {
+  const dateMin = isoDate(dates[0]);
+  const last = new Date(dates[6]);
+  last.setDate(last.getDate() + 1);
+  const dateMax = isoDate(last);
+
+  const r = await fetch(`/api/calendar?date_min=${dateMin}&date_max=${dateMax}`);
+  const body = await r.json();
+  if (body.error) throw new Error(body.error);
+  return body;
+}
+
+// ── Resolve event color from category relationships ───────────
+function eventColor(ev, included) {
+  const catData = ev.relationships?.categories?.data ?? [];
+  if (catData.length === 0) return '#9CA3AF';
+
+  const catId = catData[0].id;
+
+  // Try member map first
+  if (state.members[catId]) return state.members[catId].color;
+
+  // Fall back to included sideloaded data
+  if (included) {
+    const cat = included.find(i => i.type === 'categories' && i.id === catId);
+    if (cat) {
+      const color = resolveColor(cat.attributes?.color);
+      // Cache it
+      state.members[catId] = { label: cat.attributes?.label ?? 'Person', color };
+      return color;
+    }
+  }
+
+  return '#9CA3AF';
+}
+
+function formatTime(isoStr) {
+  if (!isoStr) return '';
+  const d = new Date(isoStr);
+  return d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
+}
+
+// ── Render ────────────────────────────────────────────────────
+function renderSkeleton(dates) {
+  const grid = document.getElementById('week-grid');
+  grid.innerHTML = dates.map(d => `
+    <div class="day-col loading-col${isToday(d) ? ' is-today' : ''}">
+      <div class="day-head">
+        <div class="day-dow">${DAYS[d.getDay()]}</div>
+        <div class="day-num">${d.getDate()}</div>
+      </div>
+      <div class="events-wrap">
+        <div class="skeleton" style="animation-delay:${Math.random() * 0.5}s"></div>
+      </div>
+    </div>
+  `).join('');
+}
+
+function renderWeek(dates, events, included) {
+  // Group events by local date string
+  const byDate = {};
+  dates.forEach(d => byDate[isoDate(d)] = []);
+
+  events.forEach(ev => {
+    const attr = ev.attributes ?? {};
+    // starts_at can be a full ISO or just a date
+    const raw = attr.starts_at ?? attr.date ?? '';
+    const key = raw.split('T')[0];
+    if (byDate[key] !== undefined) byDate[key].push(ev);
+  });
+
+  // Sort each day: all-day first, then by start time
+  Object.keys(byDate).forEach(k => {
+    byDate[k].sort((a, b) => {
+      const aA = a.attributes?.all_day ?? false;
+      const bA = b.attributes?.all_day ?? false;
+      if (aA && !bA) return -1;
+      if (!aA && bA) return 1;
+      return (a.attributes?.starts_at ?? '').localeCompare(b.attributes?.starts_at ?? '');
+    });
+  });
+
+  // Update week range label
+  const opts = { month: 'short', day: 'numeric' };
+  const s = dates[0].toLocaleDateString('en-US', opts);
+  const e = dates[6].toLocaleDateString('en-US', opts);
+  document.getElementById('week-range').textContent = `${s} – ${e}`;
+
+  const grid = document.getElementById('week-grid');
+  grid.innerHTML = dates.map(d => {
+    const key = isoDate(d);
+    const dayEvs = byDate[key] ?? [];
+    const todayClass = isToday(d) ? ' is-today' : '';
+
+    const numHtml = isToday(d)
+      ? `<div class="day-num"><span>${d.getDate()}</span></div>`
+      : `<div class="day-num">${d.getDate()}</div>`;
+
+    let evHtml;
+    if (dayEvs.length === 0) {
+      evHtml = `<div class="empty-day"><div class="empty-dot"></div></div>`;
+    } else {
+      evHtml = dayEvs.map(ev => {
+        const attr = ev.attributes ?? {};
+        const color = eventColor(ev, included);
+        const allDay = attr.all_day ?? false;
+        const timeStr = allDay ? 'All day' : formatTime(attr.starts_at);
+        const title = attr.summary ?? attr.title ?? 'Event';
+        return `
+          <div class="ev${allDay ? ' all-day' : ''}" style="background:${color}">
+            <div class="ev-time">${timeStr}</div>
+            <div class="ev-title">${title}</div>
+          </div>
+        `;
+      }).join('');
+    }
+
+    return `
+      <div class="day-col${todayClass}">
+        <div class="day-head">
+          <div class="day-dow">${DAYS[d.getDay()]}</div>
+          ${numHtml}
+        </div>
+        <div class="events-wrap">${evHtml}</div>
+      </div>
+    `;
+  }).join('');
+}
+
+// ── Main load ─────────────────────────────────────────────────
+async function load() {
+  const dates = getWeekDates(state.weekOffset);
+  renderSkeleton(dates);
+
+  try {
+    const data = await loadCalendar(dates);
+    const events = data.data ?? [];
+    const included = data.included ?? [];
+
+    // Absorb any sideloaded categories into member map
+    included.forEach(item => {
+      if (item.type === 'categories' && !state.members[item.id]) {
+        state.members[item.id] = {
+          label: item.attributes?.label ?? 'Person',
+          color: resolveColor(item.attributes?.color),
+        };
+      }
+    });
+
+    renderWeek(dates, events, included);
+    renderLegend();
+  } catch (e) {
+    showError(e.message);
+    renderWeek(dates, [], []);
+  }
+}
+
+// ── Auto-refresh every 5 minutes ──────────────────────────────
+function startRefresh() {
+  clearInterval(state.refreshTimer);
+  state.refreshTimer = setInterval(load, 5 * 60 * 1000);
+}
+
+// ── Boot ──────────────────────────────────────────────────────
+(async () => {
+  await loadMembers();
+  await load();
+  startRefresh();
+})();
+</script>
+
+</body>
+</html>
