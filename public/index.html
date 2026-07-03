@@ -440,17 +440,17 @@ async function loadCalendar(dates) {
 
 // ── Resolve event color from category relationships ───────────
 function eventColor(ev, included) {
-  const catData = ev.relationships?.categories?.data ?? [];
-  if (catData.length === 0) return '#9CA3AF';
+  const catRel = ev.relationships?.category?.data;
+  if (!catRel) return '#9CA3AF';
 
-  const catId = catData[0].id;
+  const catId = catRel.id;
 
   // Try member map first
   if (state.members[catId]) return state.members[catId].color;
 
   // Fall back to included sideloaded data
   if (included) {
-    const cat = included.find(i => i.type === 'categories' && i.id === catId);
+    const cat = included.find(i => i.type === 'category' && i.id === catId);
     if (cat) {
       const color = resolveColor(cat.attributes?.color);
       // Cache it
@@ -567,7 +567,7 @@ async function load() {
 
     // Absorb any sideloaded categories into member map
     included.forEach(item => {
-      if (item.type === 'categories' && !state.members[item.id]) {
+      if (item.type === 'category' && !state.members[item.id]) {
         state.members[item.id] = {
           label: item.attributes?.label ?? 'Person',
           color: resolveColor(item.attributes?.color),
